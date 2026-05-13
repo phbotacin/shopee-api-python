@@ -41,8 +41,8 @@ URL = 'https://open-api.affiliate.shopee.com.br/graphql'
 # ==========================================
 INTERVALO_MINUTOS = 10
 
-MIN_DESCONTO = 40
-MIN_SALES = 30
+MIN_DESCONTO = 30
+MIN_SALES = 20
 MIN_COMISSAO = 0.03
 
 LIMIT = 50
