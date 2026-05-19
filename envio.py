@@ -2,6 +2,7 @@ import requests
 import os
 
 from urllib.parse import urlparse
+from datetime import datetime
 # ==========================================
 # CONFIG EVOLUTION API
 # ==========================================
@@ -51,7 +52,10 @@ def enviar_whatsapp(
 
     resp = response.json()
 
+    agora = datetime.now().strftime("%H:%M:%S")
+
     print("\n📤 Enviando oferta...")
+    print(f"🕒 Horário : {agora}")
     print(f"🛍️ Produto : {titulo}")
 
     print(f"\n👥 Grupo   : {grupo_nome}")
