@@ -764,6 +764,26 @@ def scanner():
             # ==================================
             if fila_ofertas:
 
+                # ==============================
+                # CONTROLE DE HORÁRIO
+                # ==============================
+                hora_atual = datetime.now().hour
+
+                if hora_atual < 6 or hora_atual >= 21:
+
+                    print(
+                        f"\n🌙 Fora do horário permitido "
+                        f"({hora_atual}h)"
+                    )
+
+                    print(
+                        "⏸️ Envio pausado até às 06h"
+                    )
+
+                    time.sleep(600)
+
+                    continue
+
                 item = fila_ofertas.pop(0)
 
                 texto = gerar_texto_oferta(
