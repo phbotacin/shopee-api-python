@@ -18,10 +18,10 @@ from envio import enviar_whatsapp
 INTERVALO_ENVIO = 15 * 60
 INTERVALO_BUSCA = 60
 
-MIN_SCORE_ENVIO = 140
+MIN_SCORE_ENVIO = 100
 
 MIN_DESCONTO = 20
-MIN_SALES = 100
+MIN_SALES = 50
 MIN_COMISSAO = 0.03
 
 LIMIT = 50
@@ -37,8 +37,8 @@ ARQUIVO_CSV = 'data/novas_promocoes.csv'
 # GRUPOS
 # ==========================================
 GRUPOS = [
-    "120363423990969726@g.us",
-    "120363423599499160@g.us"
+    "120363423599499160@g.us",
+    "120363423990969726@g.us"
 ]
 
 # ==========================================
@@ -326,6 +326,9 @@ def buscar_produtos(page=1):
         .get('data', {})
         .get('productOfferV2', {})
     )
+    
+    print("📦 TOTAL RETORNADO API:", len(data.get('nodes', [])))
+    print(json.dumps(data.get('nodes', [])[:1], indent=2, ensure_ascii=False))
 
     return data.get('nodes', [])
 
