@@ -6,30 +6,43 @@ import csv
 import re
 import os
 import urllib3
+
 from datetime import datetime
+
 from gerador import gerar_texto_oferta
 from envio import enviar_whatsapp
 
-INTERVALO_ENVIO = 900
-INTERVALO_MINUTOS = 10
-MAX_ENVIOS_POR_CICLO = 3
-INTERVALO_BUSCA = 60
+# ==========================================
+# CONFIG GERAL
+# ==========================================
 INTERVALO_ENVIO = 15 * 60
-FILA_OFERTAS = []
-MIN_SCORE_ENVIO = 180
+INTERVALO_BUSCA = 60
 
+MIN_SCORE_ENVIO = 160
+
+MIN_DESCONTO = 20
+MIN_SALES = 100
+MIN_COMISSAO = 0.03
+
+LIMIT = 50
+PAGINAS = 10
+
+# ==========================================
+# ARQUIVOS
+# ==========================================
+ARQUIVO_HISTORICO = 'data/historico_ids.json'
+ARQUIVO_CSV = 'data/novas_promocoes.csv'
+
+# ==========================================
+# GRUPOS
+# ==========================================
 GRUPOS = [
     "120363423990969726@g.us",
     "120363423599499160@g.us"
 ]
 
 # ==========================================
-# REMOVE AVISO SSL
-# ==========================================
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-# ==========================================
-# CONFIG API
+# API SHOPEE
 # ==========================================
 APP_ID = '18364220581'
 SECRET = 'GAHBWP5ADTSBNEYR7VUMWLVAA252EXGL'
@@ -37,48 +50,46 @@ SECRET = 'GAHBWP5ADTSBNEYR7VUMWLVAA252EXGL'
 URL = 'https://open-api.affiliate.shopee.com.br/graphql'
 
 # ==========================================
-# CONFIGURAÇÕES DO BOT
+# REMOVE SSL WARNING
 # ==========================================
-INTERVALO_MINUTOS = 10
-
-MIN_DESCONTO = 30
-MIN_SALES = 20
-MIN_COMISSAO = 0.03
-
-LIMIT = 50
-PAGINAS = 10
-
-ARQUIVO_HISTORICO = 'data/historico_ids.json'
-ARQUIVO_CSV = 'data/novas_promocoes.csv'
+urllib3.disable_warnings(
+    urllib3.exceptions.InsecureRequestWarning
+)
 
 # ==========================================
-# SEM FILTRO DE PALAVRA
+# BLACKLIST
 # ==========================================
-KEYWORDS = [""]
+PALAVRAS_BLOQUEADAS = [
+
+    "calcinha",
+    "sutiã",
+    "vibrador",
+    "lace",
+    "peruca",
+    "adulto",
+    "sex",
+    "cueca",
+    "lingerie",
+    "cinta liga",
+    "fantasia sexy",
+    "meia arrastão"
+]
 
 # ==========================================
-# LIMPA COMISSION BUGADA
+# CONTROLE DE SIMILARIDADE
 # ==========================================
-def limpar_commission_rate(valor_str):
+FINGERPRINTS_ENVIADOS = []
 
-    if not valor_str:
-        return 0
-
-    valor_str = str(valor_str)
-
-    match = re.search(r'0\.\d+', valor_str)
-
-    if match:
-        return float(match.group(0))
-
-    return 0
+MAX_FINGERPRINTS = 300
 
 # ==========================================
 # HISTÓRICO IDS
 # ==========================================
 def carregar_historico():
 
-    if not os.path.exists(ARQUIVO_HISTORICO):
+    if not os.path.exists(
+        ARQUIVO_HISTORICO
+    ):
         return set()
 
     with open(
@@ -97,23 +108,145 @@ def salvar_historico(ids):
         encoding='utf-8'
     ) as f:
 
-        json.dump(list(ids), f)
+        json.dump(
+            list(ids),
+            f
+        )
+
+# ==========================================
+# LIMPA COMISSÃO
+# ==========================================
+def limpar_commission_rate(valor_str):
+
+    if not valor_str:
+        return 0
+
+    valor_str = str(valor_str)
+
+    match = re.search(
+        r'0\.\d+',
+        valor_str
+    )
+
+    if match:
+        return float(match.group(0))
+
+    return 0
+
+# ==========================================
+# NORMALIZA NOME
+# ==========================================
+def normalizar_nome(nome):
+
+    nome = nome.lower()
+
+    remover = [
+
+        "original",
+        "oficial",
+        "promoção",
+        "frete grátis",
+        "novo",
+        "nova",
+        "kit",
+        "unidades",
+        "envio imediato",
+        "pronta entrega",
+        "premium",
+        "top",
+        "lancamento",
+        "lançamento"
+    ]
+
+    for r in remover:
+
+        nome = nome.replace(
+            r,
+            ""
+        )
+
+    nome = re.sub(
+        r'[^a-z0-9 ]',
+        '',
+        nome
+    )
+
+    palavras = nome.split()
+
+    palavras = [
+
+        p for p in palavras
+        if len(p) > 3
+
+    ]
+
+    return palavras
+
+# ==========================================
+# PRODUTO PARECIDO
+# ==========================================
+def produto_parecido(nome):
+
+    palavras_novas = set(
+        normalizar_nome(nome)
+    )
+
+    for antigo in FINGERPRINTS_ENVIADOS:
+
+        palavras_antigas = set(
+            normalizar_nome(antigo)
+        )
+
+        intersecao = (
+            palavras_novas
+            &
+            palavras_antigas
+        )
+
+        similaridade = (
+
+            len(intersecao)
+
+            /
+
+            max(
+                len(palavras_novas),
+                1
+            )
+
+        )
+
+        # 70% parecido
+        if similaridade >= 0.7:
+            return True
+
+    return False
 
 # ==========================================
 # ASSINATURA API
 # ==========================================
 def gerar_headers(payload):
 
-    timestamp = str(int(time.time()))
+    timestamp = str(
+        int(time.time())
+    )
 
-    factor = APP_ID + timestamp + payload + SECRET
+    factor = (
+        APP_ID
+        + timestamp
+        + payload
+        + SECRET
+    )
 
     signature = hashlib.sha256(
         factor.encode('utf-8')
     ).hexdigest()
 
     return {
-        'Content-Type': 'application/json',
+
+        'Content-Type':
+            'application/json',
+
         'Authorization':
             f"SHA256 Credential={APP_ID},"
             f"Timestamp={timestamp},"
@@ -121,14 +254,14 @@ def gerar_headers(payload):
     }
 
 # ==========================================
-# CONSULTA API
+# BUSCA PRODUTOS
 # ==========================================
-def buscar_produtos(keyword="", page=1):
+def buscar_produtos(page=1):
 
     query = f'''
     {{
       productOfferV2(
-        keyword: "{keyword}",
+        keyword: "",
         sortType: 4,
         page: {page},
         limit: {LIMIT}
@@ -147,16 +280,14 @@ def buscar_produtos(keyword="", page=1):
           shopName
         }}
 
-        pageInfo {{
-          hasNextPage
-        }}
       }}
     }}
     '''
 
-    payload = json.dumps({
-        'query': query
-    }, separators=(',', ':'))
+    payload = json.dumps(
+        {'query': query},
+        separators=(',', ':')
+    )
 
     headers = gerar_headers(payload)
 
@@ -190,19 +321,24 @@ def buscar_produtos(keyword="", page=1):
 
         return []
 
-    data = resposta_json \
-        .get('data', {}) \
+    data = (
+        resposta_json
+        .get('data', {})
         .get('productOfferV2', {})
+    )
 
     return data.get('nodes', [])
 
 # ==========================================
-# SCORE INTELIGENTE
+# SCORE
 # ==========================================
 def calcular_score(item):
 
     desconto = float(
-        item.get('priceDiscountRate', 0)
+        item.get(
+            'priceDiscountRate',
+            0
+        )
     )
 
     sales = int(
@@ -210,16 +346,16 @@ def calcular_score(item):
     )
 
     comissao = float(
-        item.get('commissionRate_clean', 0)
+        item.get(
+            'commissionRate_clean',
+            0
+        )
     )
 
     preco = float(
         item.get('priceMin', 0)
     )
 
-    # ======================================
-    # BONUS PREÇO
-    # ======================================
     bonus_preco = 0
 
     if preco <= 50:
@@ -231,9 +367,6 @@ def calcular_score(item):
     elif preco <= 200:
         bonus_preco = 5
 
-    # ======================================
-    # BONUS SALES
-    # ======================================
     bonus_sales = 0
 
     if sales >= 1000:
@@ -245,9 +378,6 @@ def calcular_score(item):
     elif sales >= 100:
         bonus_sales = 10
 
-    # ======================================
-    # BONUS COMISSÃO
-    # ======================================
     bonus_comissao = 0
 
     if comissao >= 0.10:
@@ -259,19 +389,156 @@ def calcular_score(item):
     elif comissao >= 0.05:
         bonus_comissao = 10
 
-    # ======================================
-    # SCORE FINAL
-    # ======================================
     score = (
-        desconto * 2 +
-        sales * 0.3 +
+
+        desconto * 1.3 +
+
+        sales * 0.45 +
+
         (comissao * 100) +
+
         bonus_preco +
+
         bonus_sales +
+
         bonus_comissao
     )
 
     return round(score, 2)
+
+# ==========================================
+# FILTRA OFERTAS
+# ==========================================
+def filtrar_ofertas(
+    nodes,
+    historico
+):
+
+    novas = []
+
+    for item in nodes:
+
+        try:
+
+            item_id = str(
+                item.get('itemId')
+            )
+
+            nome = item.get(
+                'productName',
+                ''
+            ).lower()
+
+            # ==================================
+            # REPETIDO ID
+            # ==================================
+            if item_id in historico:
+                continue
+
+            # ==================================
+            # BLACKLIST
+            # ==================================
+            if any(
+
+                palavra in nome
+
+                for palavra
+                in PALAVRAS_BLOQUEADAS
+
+            ):
+                continue
+
+            # ==================================
+            # PRODUTO PARECIDO
+            # ==================================
+            if produto_parecido(nome):
+                continue
+
+            desconto = float(
+                item.get(
+                    'priceDiscountRate',
+                    0
+                )
+            )
+
+            sales = int(
+                item.get('sales', 0)
+            )
+
+            comissao = limpar_commission_rate(
+                item.get(
+                    'commissionRate',
+                    '0'
+                )
+            )
+
+            preco = float(
+                item.get('priceMin', 0)
+            )
+
+            # ==================================
+            # FILTROS
+            # ==================================
+            if desconto < MIN_DESCONTO:
+                continue
+
+            if sales < MIN_SALES:
+                continue
+
+            if comissao < MIN_COMISSAO:
+                continue
+
+            # ==================================
+            # PREÇO
+            # ==================================
+            if preco < 35:
+                continue
+
+            if preco > 3000:
+                continue
+
+            # ==================================
+            # SATURADOS
+            # ==================================
+            if sales > 50000:
+                continue
+
+            # ==================================
+            # SCORE
+            # ==================================
+            item['commissionRate_clean'] = (
+                comissao
+            )
+
+            item['score'] = calcular_score(
+                item
+            )
+
+            novas.append(item)
+
+            historico.add(item_id)
+
+            FINGERPRINTS_ENVIADOS.append(
+                nome
+            )
+
+            # ==================================
+            # LIMITA MEMÓRIA
+            # ==================================
+            if (
+                len(FINGERPRINTS_ENVIADOS)
+                > MAX_FINGERPRINTS
+            ):
+
+                FINGERPRINTS_ENVIADOS.pop(0)
+
+        except Exception as e:
+
+            print(e)
+
+            continue
+
+    return novas
 
 # ==========================================
 # SALVA CSV
@@ -291,10 +558,10 @@ def salvar_csv(produtos):
 
         writer = csv.writer(csvfile)
 
-        # CABEÇALHO
         if not arquivo_existe:
 
             writer.writerow([
+
                 'Data',
                 'Score',
                 'Item Id',
@@ -307,159 +574,40 @@ def salvar_csv(produtos):
                 'Link'
             ])
 
-        # PRODUTOS
         for item in produtos:
 
             preco = float(
-                item.get('priceMin', 0)
+                item.get(
+                    'priceMin',
+                    0
+                )
             )
 
             writer.writerow([
+
                 datetime.now().strftime(
                     '%Y-%m-%d %H:%M:%S'
                 ),
+
                 item.get('score'),
+
                 item.get('itemId'),
+
                 item.get('productName'),
-                f'R${preco:.2f}'.replace('.', ','),
+
+                f'R${preco:.2f}'
+                .replace('.', ','),
+
                 f"{item.get('priceDiscountRate')}%",
+
                 item.get('sales'),
+
                 f"{item.get('commissionRate_clean') * 100:.0f}%",
+
                 item.get('shopName'),
+
                 item.get('offerLink')
             ])
-
-# ==========================================
-# FILTRO OFERTAS
-# ==========================================
-def filtrar_ofertas(nodes, historico):
-
-    novas = []
-
-    for item in nodes:
-
-        try:
-
-            item_id = str(
-                item.get('itemId')
-            )
-
-            # IGNORA REPETIDOS
-            if item_id in historico:
-                continue
-
-            desconto = float(
-                item.get('priceDiscountRate', 0)
-            )
-
-            sales = int(
-                item.get('sales', 0)
-            )
-
-            comissao = limpar_commission_rate(
-                item.get('commissionRate', '0')
-            )
-
-            preco = float(
-                item.get('priceMin', 0)
-            )
-
-            # ==================================
-            # FILTROS
-            # ==================================
-            if desconto < MIN_DESCONTO:
-                continue
-
-            if sales < MIN_SALES:
-                continue
-
-            if comissao < MIN_COMISSAO:
-                continue
-
-            # IGNORA PREÇOS MUITO ALTOS
-            if preco > 3000:
-                continue
-
-            # SALVA COMISSÃO LIMPA
-            item['commissionRate_clean'] = comissao
-
-            # CALCULA SCORE
-            item['score'] = calcular_score(item)
-
-            novas.append(item)
-
-            historico.add(item_id)
-
-        except:
-            continue
-
-    return novas
-
-# ==========================================
-# MOSTRA OFERTAS
-# ==========================================
-def mostrar_ofertas(ofertas):
-
-    if not ofertas:
-
-        print(
-            "Nenhuma nova oferta encontrada."
-        )
-
-        return
-
-    print(
-        f"\n🔥 NOVAS OFERTAS: "
-        f"{len(ofertas)}\n"
-    )
-
-    for item in ofertas:
-
-        preco = float(
-            item.get('priceMin', 0)
-        )
-
-        print("=" * 80)
-
-        print(
-            "🛒",
-            item.get('productName')
-        )
-
-        print(
-            f"⭐ SCORE: "
-            f"{item.get('score')}"
-        )
-
-        print(
-            f"💰 R${preco:.2f}"
-            .replace('.', ',')
-        )
-
-        print(
-            f"🏷️ "
-            f"{item.get('priceDiscountRate')}% OFF"
-        )
-
-        print(
-            f"💵 Comissão: "
-            f"{item['commissionRate_clean'] * 100:.0f}%"
-        )
-
-        print(
-            f"📦 Sales: "
-            f"{item.get('sales')}"
-        )
-
-        print(
-            f"🏪 Loja: "
-            f"{item.get('shopName')}"
-        )
-
-        print(
-            f"🔗 "
-            f"{item.get('offerLink')}"
-        )
 
 # ==========================================
 # LOOP PRINCIPAL
@@ -480,19 +628,42 @@ def scanner():
 
         try:
 
+                        # ==================================
+            # HORÁRIO DE FUNCIONAMENTO
+            # 06:00 até 21:00
+            # ==================================
+            hora_atual = datetime.now().hour
+
+            if hora_atual < 6 or hora_atual >= 21:
+
+                print(
+                    f"\n🌙 Fora do horário permitido "
+                    f"({hora_atual}h)"
+                )
+
+                # Aguarda 10 minutos
+                time.sleep(600)
+
+                continue
+
             agora = time.time()
 
             # ==================================
-            # FAZ NOVA BUSCA
+            # NOVA BUSCA
             # ==================================
             if (
+
                 agora - ultima_busca
+
                 >= INTERVALO_BUSCA * 60
+
             ):
 
                 print(
+
                     f"\n🔎 Nova busca "
                     f"{datetime.now().strftime('%H:%M:%S')}"
+
                 )
 
                 todas_ofertas = []
@@ -507,7 +678,6 @@ def scanner():
                     )
 
                     produtos = buscar_produtos(
-                        keyword="",
                         page=page
                     )
 
@@ -522,31 +692,39 @@ def scanner():
 
                     time.sleep(1)
 
-                # ==============================
+                # ==================================
                 # ORDENA SCORE
-                # ==============================
+                # ==================================
                 todas_ofertas.sort(
-                    key=lambda x: float(
+
+                    key=lambda x:
+                    float(
                         x.get('score', 0)
                     ),
+
                     reverse=True
                 )
 
-                # ==============================
-                # ADICIONA NA FILA
-                # ==============================
+                # ==================================
+                # FILA
+                # ==================================
                 for item in todas_ofertas:
 
                     if (
-                        item.get('score', 0)
-                        >= 180
+                        item.get(
+                            'score',
+                            0
+                        )
+                        >= MIN_SCORE_ENVIO
                     ):
 
                         fila_ofertas.append(
                             item
                         )
 
-                # REMOVE DUPLICADOS
+                # ==================================
+                # REMOVE IDS DUPLICADOS
+                # ==================================
                 ids = set()
 
                 fila_unica = []
@@ -574,13 +752,15 @@ def scanner():
                 ultima_busca = agora
 
                 print(
+
                     f"\n📦 "
                     f"{len(fila_ofertas)} "
                     f"ofertas na fila"
+
                 )
 
             # ==================================
-            # ENVIA 1 OFERTA
+            # ENVIA
             # ==================================
             if fila_ofertas:
 
@@ -590,23 +770,26 @@ def scanner():
                     item
                 )
 
-                imagem = item.get(
-                    'imageUrl'
-                )
-
                 print(
                     f"\n📤 Enviando:"
                 )
 
                 print(
-                    item.get('productName')
+                    item.get(
+                        'productName'
+                    )
                 )
 
                 for grupo in GRUPOS:
 
                     enviar_whatsapp(
+
                         grupo_id=grupo,
-                        imagem_url=item.get('imageUrl'),
+
+                        imagem_url=item.get(
+                            'imageUrl'
+                        ),
+
                         legenda=texto
                     )
 
@@ -615,9 +798,8 @@ def scanner():
                 salvar_csv([item])
 
                 print(
-                    f"\n⏳ "
-                    f"Próximo envio em "
-                    f"15 minutos..."
+                    "\n⏳ Próximo envio "
+                    "em 15 minutos..."
                 )
 
                 time.sleep(
@@ -627,8 +809,7 @@ def scanner():
             else:
 
                 print(
-                    "\n📭 "
-                    "Fila vazia..."
+                    "\n📭 Fila vazia..."
                 )
 
                 time.sleep(60)
@@ -640,3 +821,8 @@ def scanner():
             print(str(e))
 
             time.sleep(30)
+
+# ==========================================
+# START
+# ==========================================
+scanner()

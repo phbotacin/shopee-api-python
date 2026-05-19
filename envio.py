@@ -5,11 +5,11 @@ from urllib.parse import urlparse
 # ==========================================
 # CONFIG EVOLUTION API
 # ==========================================
-URL = "http://localhost:8081"
+URL = "https://evolution.casteloautomotivo.com.br/"
 
-INSTANCE = "WPP_TESTE"
+INSTANCE = "evolution_vps"
 
-TOKEN = "B0530B9FA045-43CC-88A0-EFCC49D4B84A"
+TOKEN = "959FC4B19C56-4635-9097-94070E58B24A"
 
 # ==========================================
 # ENVIO WHATSAPP
