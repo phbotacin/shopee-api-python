@@ -328,7 +328,6 @@ def buscar_produtos(page=1):
     )
     
     print("📦 TOTAL RETORNADO API:", len(data.get('nodes', [])))
-    print(json.dumps(data.get('nodes', [])[:1], indent=2, ensure_ascii=False))
 
     return data.get('nodes', [])
 
