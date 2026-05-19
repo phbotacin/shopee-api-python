@@ -51,8 +51,17 @@ def enviar_whatsapp(
 
     resp = response.json()
 
-    print({
-        "status": response.status_code,
-        "id": resp.get("key", {}).get("id"),
-        "grupo": resp.get("key", {}).get("remoteJid"),
-    })
+    print("\n📤 Enviando oferta...")
+    print(f"🛍️ Produto : {titulo}")
+
+    print(f"\n👥 Grupo   : {grupo_nome}")
+    print(f"📱 Status  : {response.status_code}")
+
+    if response.status_code == 201:
+        print("✅ Sucesso")
+        print(f"🆔 Msg ID  : {resp.get('key', {}).get('id')}")
+    else:
+        print("❌ Erro ao enviar")
+        print(resp)
+
+    print("-" * 50)
