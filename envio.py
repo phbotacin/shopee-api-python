@@ -56,15 +56,20 @@ def enviar_whatsapp(
 
     print("\n📤 Enviando oferta...")
     print(f"🕒 Horário : {agora}")
-    print(f"🛍️ Produto : {titulo}")
 
-    print(f"\n👥 Grupo   : {grupo_nome}")
-    print(f"📱 Status  : {response.status_code}")
+    print(f"\n📱 Status  : {response.status_code}")
 
     if response.status_code == 201:
+
         print("✅ Sucesso")
-        print(f"🆔 Msg ID  : {resp.get('key', {}).get('id')}")
+
+        print(
+            f"🆔 Msg ID  : "
+            f"{resp.get('key', {}).get('id')}"
+        )
+
     else:
+
         print("❌ Erro ao enviar")
         print(resp)
 
