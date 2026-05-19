@@ -49,4 +49,10 @@ def enviar_whatsapp(
         f"WhatsApp: {response.status_code}"
     )
 
-    print(response.text)
+    resp = response.json()
+
+    print({
+        "status": response.status_code,
+        "id": resp.get("key", {}).get("id"),
+        "grupo": resp.get("key", {}).get("remoteJid"),
+    })
