@@ -16,9 +16,9 @@ from envio import enviar_whatsapp
 # CONFIG GERAL
 # ==========================================
 INTERVALO_ENVIO = 15 * 60
-INTERVALO_BUSCA = 60
+INTERVALO_BUSCA = 30
 
-MIN_SCORE_ENVIO = 95
+MIN_SCORE_ENVIO = 80
 
 MIN_DESCONTO = 20
 MIN_SALES = 50
@@ -262,7 +262,7 @@ def buscar_produtos(page=1):
     {{
       productOfferV2(
         keyword: "",
-        sortType: 4,
+        sortType: 3,
         page: {page},
         limit: {LIMIT}
       ) {{
@@ -657,7 +657,7 @@ def scanner():
 
                 agora - ultima_busca
 
-                >= INTERVALO_BUSCA * 60
+                >= INTERVALO_BUSCA
 
             ):
 
@@ -751,7 +751,10 @@ def scanner():
                     historico
                 )
 
-                ultima_busca = agora
+                if fila_ofertas:
+                    ultima_busca = agora
+                else:
+                    ultima_busca = 0
 
                 print(
 
@@ -834,7 +837,7 @@ def scanner():
                     "\n📭 Fila vazia..."
                 )
 
-                time.sleep(60)
+                time.sleep(5)
 
         except Exception as e:
 
